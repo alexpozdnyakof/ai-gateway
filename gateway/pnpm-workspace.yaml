@@ -1,0 +1,4 @@
+# Разрешаем build-скрипты только доверенным пакетам.
+# esbuild нужен для tsx (dev-режим).
+allowBuilds:
+  esbuild: true

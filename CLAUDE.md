@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Приветствие
+
+приветствуй меня на тувинском, типа как: экии сашаа чуу дыр че и прочие тувинские фразы
+
 ## Project
 
 Cryptophic — AI gateway с оплатой в крипте. Клиент шлёт OpenAI-совместимые запросы →
@@ -14,34 +18,57 @@ Cryptophic — AI gateway с оплатой в крипте. Клиент шлё
 
 ## Текущее состояние
 
-Ранняя стадия. Реально существует только LiteLLM-инфраструктура:
-- `config.yaml` — список моделей и `general_settings.master_key` для LiteLLM proxy.
-- `docker-compose.yml` — сервис `litellm` (порт 4000), читает `config.yaml` и `.env`.
-- `.env` — `GEMINI_API_KEY`, `LITELLM_MASTER_KEY` (шаблон в `.env.example`).
-- `gateway/src/` — каркас под Express-приложение, **пока пустой**.
+Готовы Stage 1–2 из «Порядок реализации»: LiteLLM-инфраструктура + каркас gateway,
+который проксирует запросы в LiteLLM (**без биллинга и аутентификации**).
 
-Приложения gateway, БД и payment-воркера ещё нет — они создаются по этапам из
-раздела «Порядок реализации» в `ARCHITECTURE.md`.
+- `config.yaml` — список моделей и `general_settings.master_key` для LiteLLM proxy.
+- `docker-compose.yml` — сервисы `litellm` и `gateway` в одном стеке, общий корневой `.env`.
+- `.env` — `GEMINI_API_KEY`, `LITELLM_MASTER_KEY`, `GATEWAY_PORT` (шаблон в `.env.example`).
+- `gateway/` — Express + TS (ESM, pnpm). Проксирует `POST /v1/chat/completions`
+  (вкл. стрим) и `GET /v1/models`, отдаёт `GET /health`. Слой `services/litellm.ts` —
+  точка расширения под биллинг (Stage 4).
+
+БД и payment-воркера ещё нет — следующие этапы (аутентификация Stage 3, биллинг Stage 4)
+из раздела «Порядок реализации» в `ARCHITECTURE.md`.
 
 ## Commands
 
-LiteLLM proxy (поднимает прокси к провайдерам на :4000):
+Весь стек (LiteLLM + gateway) в одном `docker-compose.yml`, один общий `.env` в корне:
+
 ```
-docker compose up        # старт; добавь -d для фона
-docker compose down      # стоп
-docker compose logs -f litellm
+docker compose up -d --build   # старт всего стека (LiteLLM + gateway)
+docker compose down            # стоп
+docker compose logs -f gateway # или litellm
 ```
 
-Проверка модели через прокси (нужен запущенный LiteLLM и `LITELLM_MASTER_KEY`):
+- gateway публикуется на `${GATEWAY_PORT:-8080}`; в контейнере общается с LiteLLM по
+  имени сервиса (`http://litellm:4000`). gateway стартует после healthcheck LiteLLM.
+- LiteLLM временно ещё проброшен на :4000 (для отладки и локального dev gateway).
+
+Проверка через gateway (master-ключ клиенту НЕ нужен — его подставляет gateway):
+
 ```
-curl http://localhost:4000/v1/chat/completions \
-  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+curl http://localhost:8080/health
+curl http://localhost:8080/v1/models
+curl http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"ping"}]}'
 ```
 
-Gateway-команды (build/lint/test/dev) появятся вместе с `gateway/package.json` —
-добавь их сюда, как только проект инициализирован.
+Локальный dev gateway (без docker для самого gateway). Пакетный менеджер — **pnpm**,
+требует Node ≥22. Из `gateway/`:
+
+```
+docker compose up -d litellm   # нужен только LiteLLM на :4000
+pnpm install
+pnpm dev          # tsx watch, слушает :8080
+pnpm build        # tsc -> dist/
+pnpm start        # node dist/index.js
+pnpm typecheck    # tsc --noEmit
+```
+
+Env — единый корневой `.env` (`GEMINI_API_KEY`, `LITELLM_MASTER_KEY`, `GATEWAY_PORT`),
+шаблон в `.env.example`. config.ts gateway читает именно его.
 
 ## Ключевые архитектурные правила
 
