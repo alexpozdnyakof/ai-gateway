@@ -1,0 +1,71 @@
+import { Router } from "express";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db } from "../db/index.js";
+import { users } from "../db/schema.js";
+import { adminAuth } from "../middleware/admin.js";
+import { createApiKeyForUser } from "../services/keys.js";
+
+export const adminRouter = Router();
+
+// Только /admin/* — под admin-токеном (путь обязателен, иначе guard ловит все запросы).
+adminRouter.use("/admin", adminAuth);
+
+const createUserSchema = z.object({ email: z.string().email() });
+const createKeySchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1).optional(),
+});
+
+// Код ошибки уникального ограничения Postgres.
+const PG_UNIQUE_VIOLATION = "23505";
+
+// POST /admin/users { email } — создать юзера.
+adminRouter.post("/admin/users", async (req, res, next) => {
+  const parsed = createUserSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: "email is required", type: "invalid_request_error" } });
+    return;
+  }
+
+  try {
+    const [row] = await db
+      .insert(users)
+      .values({ email: parsed.data.email })
+      .returning({ id: users.id, email: users.email });
+    res.status(201).json(row);
+  } catch (err) {
+    if ((err as { code?: string })?.code === PG_UNIQUE_VIOLATION) {
+      res.status(409).json({ error: { message: "User already exists", type: "conflict" } });
+      return;
+    }
+    next(err);
+  }
+});
+
+// POST /admin/keys { email, name? } — выдать ключ юзеру (raw показываем один раз).
+adminRouter.post("/admin/keys", async (req, res, next) => {
+  const parsed = createKeySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: "email is required", type: "invalid_request_error" } });
+    return;
+  }
+
+  try {
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, parsed.data.email))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: { message: "User not found", type: "not_found" } });
+      return;
+    }
+
+    const key = await createApiKeyForUser(user.id, parsed.data.name);
+    res.status(201).json({ id: key.id, prefix: key.prefix, key: key.raw });
+  } catch (err) {
+    next(err);
+  }
+});

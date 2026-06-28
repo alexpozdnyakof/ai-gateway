@@ -10,6 +10,10 @@ const envSchema = z.object({
   LITELLM_URL: z.string().url().default("http://localhost:4000"),
   LITELLM_MASTER_KEY: z.string().min(1, "LITELLM_MASTER_KEY is required"),
   GATEWAY_PORT: z.coerce.number().int().positive().default(8080),
+  // Postgres. WHATWG URL принимает схему postgres://, поэтому .url() подходит.
+  DATABASE_URL: z.string().url(),
+  // Секрет для admin-эндпоинтов (bootstrap юзеров/ключей).
+  ADMIN_TOKEN: z.string().min(1, "ADMIN_TOKEN is required"),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -22,6 +22,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 
 COPY --from=build /app/dist ./dist
+# SQL-миграции нужны рантайму (runMigrations на старте).
+COPY drizzle ./drizzle
 
 EXPOSE 8080
 CMD ["node", "dist/index.js"]

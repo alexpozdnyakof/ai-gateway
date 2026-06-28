@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { Readable } from "node:stream";
 import { forwardChat, listModels } from "../services/litellm.js";
+import { authenticate } from "../middleware/auth.js";
 
 export const proxyRouter = Router();
+
+// Только /v1/* требуют валидный API-ключ (путь обязателен).
+proxyRouter.use("/v1", authenticate);
 
 proxyRouter.post("/v1/chat/completions", async (req, res, next) => {
   try {
