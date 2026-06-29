@@ -10,8 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Cryptophic — AI gateway с оплатой в крипте. Клиент шлёт OpenAI-совместимые запросы →
 **Gateway** (Node + Express, TypeScript) проксирует их в **LiteLLM** → провайдеры
-(сейчас Gemini 2.5 pro/flash). Оплата — предоплата балансом, пополнение криптой
-(USDT TRC-20, свои депозит-адреса).
+(Gemini 2.5 pro/flash и Anthropic Claude Opus 4.8 / Sonnet 4.6 / Haiku 4.5). Оплата —
+предоплата балансом, пополнение криптой (USDT TRC-20, свои депозит-адреса).
 
 Полный архитектурный план и принятые решения — в `ARCHITECTURE.md`. Сверяйся с ним
 при реализации; это живой источник правды по дизайну.
@@ -22,10 +22,13 @@ Cryptophic — AI gateway с оплатой в крипте. Клиент шлё
 аутентификация по API-ключам (**пока без биллинга/проверки баланса**).
 
 - `config.yaml` — список моделей и `general_settings.master_key` для LiteLLM proxy.
+  Провайдеры: Gemini (`gemini-2.5-pro/flash`) и Anthropic (`claude-opus-4-8`,
+  `claude-sonnet-4-6`, `claude-haiku-4-5`). Клиент выбирает модель полем `model`
+  в теле запроса — значение = `model_name`-алиас из `config.yaml`.
 - `docker-compose.yml` — сервисы `postgres`, `litellm`, `gateway` в одном стеке, общий
   корневой `.env`. gateway стартует после healthcheck postgres и litellm.
-- `.env` — `GEMINI_API_KEY`, `LITELLM_MASTER_KEY`, `GATEWAY_PORT`, `ADMIN_TOKEN`,
-  `POSTGRES_*`, `DATABASE_URL` (шаблон в `.env.example`).
+- `.env` — `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `LITELLM_MASTER_KEY`, `GATEWAY_PORT`,
+  `ADMIN_TOKEN`, `POSTGRES_*`, `DATABASE_URL` (шаблон в `.env.example`).
 - `gateway/` — Express + TS (ESM, pnpm). Проксирует `POST /v1/chat/completions`
   (вкл. стрим) и `GET /v1/models` (за `authenticate`), отдаёт публичный `GET /health`.
   Слой `services/litellm.ts` — точка расширения под биллинг (Stage 4).
