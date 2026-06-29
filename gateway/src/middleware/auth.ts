@@ -10,19 +10,14 @@ function unauthorized(message: string) {
   };
 }
 
-/**
- * Аутентификация по API-ключу: `Authorization: Bearer <cryptophic_key>`.
- * Ключ хешируется (SHA-256) и ищется прямым индексированным lookup.
- * Кладёт req.auth и пропускает; иначе 401.
- *
- * Проверки баланса здесь НЕТ — это Stage 4.
- */
 export const authenticate: RequestHandler = async (req, res, next) => {
   try {
     const header = req.header("authorization") ?? "";
     const match = header.match(/^Bearer\s+(.+)$/i);
     if (!match) {
-      res.status(401).json(unauthorized("Missing or malformed Authorization header"));
+      res
+        .status(401)
+        .json(unauthorized("Missing or malformed Authorization header"));
       return;
     }
 
@@ -49,7 +44,9 @@ export const authenticate: RequestHandler = async (req, res, next) => {
     db.update(apiKeys)
       .set({ lastUsedAt: new Date() })
       .where(eq(apiKeys.id, row.apiKeyId))
-      .catch((err) => console.error("[gateway] last_used_at update failed:", err));
+      .catch((err) =>
+        console.error("[gateway] last_used_at update failed:", err),
+      );
 
     next();
   } catch (err) {
