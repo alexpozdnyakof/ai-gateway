@@ -14,9 +14,11 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed-pricing.ts"
   },
   "dependencies": {
+    "decimal.js": "^10.4.3",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",

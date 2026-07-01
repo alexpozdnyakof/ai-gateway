@@ -14,6 +14,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   // Секрет для admin-эндпоинтов (bootstrap юзеров/ключей).
   ADMIN_TOKEN: z.string().min(1, "ADMIN_TOKEN is required"),
+  // Минимальный баланс для пропуска запроса (NUMERIC-строка). Ниже — 402.
+  BILLING_MIN_BALANCE: z.string().default("0"),
 });
 
 const parsed = envSchema.safeParse(process.env);

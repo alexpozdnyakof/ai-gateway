@@ -8,6 +8,13 @@
       "when": 1782472101937,
       "tag": "0000_salty_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782816105731,
+      "tag": "0001_rare_guardsmen",
+      "breakpoints": true
     }
   ]
 }

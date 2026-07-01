@@ -1,6 +1,7 @@
 import express from "express";
 import { config } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
+import { loadPricing } from "./services/pricing.js";
 import { healthRouter } from "./routes/health.js";
 import { adminRouter } from "./routes/admin.js";
 import { accountRouter } from "./routes/account.js";
@@ -22,6 +23,9 @@ app.use(errorHandler);
 async function bootstrap() {
   // Накатываем схему перед стартом (idempotent).
   await runMigrations();
+
+  // Загружаем каталог цен в память (горячий путь биллинга).
+  await loadPricing();
 
   app.listen(config.GATEWAY_PORT, () => {
     console.log(

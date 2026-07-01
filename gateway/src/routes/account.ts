@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { apiKeys } from "../db/schema.js";
+import { apiKeys, usageRecords } from "../db/schema.js";
 import { authenticate } from "../middleware/auth.js";
 import { createApiKeyForUser } from "../services/keys.js";
+import { getBalance } from "../services/billing.js";
 
 export const accountRouter = Router();
 
@@ -12,6 +13,39 @@ export const accountRouter = Router();
 accountRouter.use("/account", authenticate);
 
 const createKeySchema = z.object({ name: z.string().min(1).optional() });
+
+// GET /account/balance — текущий баланс юзера.
+accountRouter.get("/account/balance", async (req, res, next) => {
+  try {
+    const amount = await getBalance(req.auth!.userId);
+    res.json({ amount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /account/usage?limit= — последние записи об использовании.
+accountRouter.get("/account/usage", async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const rows = await db
+      .select({
+        id: usageRecords.id,
+        model: usageRecords.model,
+        promptTokens: usageRecords.promptTokens,
+        completionTokens: usageRecords.completionTokens,
+        cost: usageRecords.cost,
+        createdAt: usageRecords.createdAt,
+      })
+      .from(usageRecords)
+      .where(eq(usageRecords.userId, req.auth!.userId))
+      .orderBy(desc(usageRecords.createdAt))
+      .limit(limit);
+    res.json({ data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /account/keys — ключи текущего юзера (без hash/raw).
 accountRouter.get("/account/keys", async (req, res, next) => {

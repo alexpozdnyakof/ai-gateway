@@ -5,6 +5,7 @@ import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { adminAuth } from "../middleware/admin.js";
 import { createApiKeyForUser } from "../services/keys.js";
+import { credit, ensureBalanceRow } from "../services/billing.js";
 
 export const adminRouter = Router();
 
@@ -15,6 +16,11 @@ const createUserSchema = z.object({ email: z.string().email() });
 const createKeySchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).optional(),
+});
+// amount — положительная NUMERIC-строка ("10.00"), без float.
+const creditSchema = z.object({
+  email: z.string().email(),
+  amount: z.string().regex(/^\d+(\.\d+)?$/, "amount must be a positive number"),
 });
 
 // Код ошибки уникального ограничения Postgres.
@@ -33,6 +39,8 @@ adminRouter.post("/admin/users", async (req, res, next) => {
       .insert(users)
       .values({ email: parsed.data.email })
       .returning({ id: users.id, email: users.email });
+    // Сразу заводим нулевой баланс.
+    await ensureBalanceRow(row!.id);
     res.status(201).json(row);
   } catch (err) {
     if ((err as { code?: string })?.code === PG_UNIQUE_VIOLATION) {
@@ -65,6 +73,33 @@ adminRouter.post("/admin/keys", async (req, res, next) => {
 
     const key = await createApiKeyForUser(user.id, parsed.data.name);
     res.status(201).json({ id: key.id, prefix: key.prefix, key: key.raw });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/credit { email, amount } — пополнить баланс юзеру (до крипты).
+adminRouter.post("/admin/credit", async (req, res, next) => {
+  const parsed = creditSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues[0]?.message ?? "invalid request", type: "invalid_request_error" } });
+    return;
+  }
+
+  try {
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, parsed.data.email))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: { message: "User not found", type: "not_found" } });
+      return;
+    }
+
+    const amount = await credit(user.id, parsed.data.amount, "deposit");
+    res.status(200).json({ amount });
   } catch (err) {
     next(err);
   }
