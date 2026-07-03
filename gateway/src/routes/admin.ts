@@ -6,6 +6,9 @@ import { users } from "../db/schema.js";
 import { adminAuth } from "../middleware/admin.js";
 import { createApiKeyForUser } from "../services/keys.js";
 import { credit, ensureBalanceRow } from "../services/billing.js";
+import { paymentsEnabled } from "../config.js";
+import { getOrCreateDepositAddress } from "../payments/deposit.js";
+import { pollOnce } from "../payments/worker.js";
 
 export const adminRouter = Router();
 
@@ -41,6 +44,8 @@ adminRouter.post("/admin/users", async (req, res, next) => {
       .returning({ id: users.id, email: users.email });
     // Сразу заводим нулевой баланс.
     await ensureBalanceRow(row!.id);
+    // Если крипта включена — сразу выдаём депозит-адрес (иначе заведётся лениво).
+    if (paymentsEnabled) await getOrCreateDepositAddress(row!.id);
     res.status(201).json(row);
   } catch (err) {
     if ((err as { code?: string })?.code === PG_UNIQUE_VIOLATION) {
@@ -100,6 +105,20 @@ adminRouter.post("/admin/credit", async (req, res, next) => {
 
     const amount = await credit(user.id, parsed.data.amount, "deposit");
     res.status(200).json({ amount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/payments/poll — ручной прогон поллинга депозитов (для E2E).
+adminRouter.post("/admin/payments/poll", async (_req, res, next) => {
+  if (!paymentsEnabled) {
+    res.status(503).json({ error: { message: "payments not configured", type: "unavailable" } });
+    return;
+  }
+  try {
+    const summary = await pollOnce();
+    res.status(200).json(summary);
   } catch (err) {
     next(err);
   }

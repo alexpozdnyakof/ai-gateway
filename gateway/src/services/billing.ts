@@ -1,6 +1,6 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { balances, ledger, usageRecords } from "../db/schema.js";
+import { balances, ledger, payments, usageRecords } from "../db/schema.js";
 import { computeCost } from "./pricing.js";
 
 // Тип транзакционного объекта drizzle (callback-параметр db.transaction).
@@ -100,6 +100,7 @@ export async function credit(
   userId: string,
   amount: string,
   type: CreditType = "deposit",
+  ref?: { refType: string; refId: string },
 ): Promise<string> {
   let newAmount = "0";
   await db.transaction(async (tx) => {
@@ -115,8 +116,54 @@ export async function credit(
       .returning({ amount: balances.amount });
     newAmount = row!.amount;
 
-    await tx.insert(ledger).values({ userId, type, amount });
+    await tx.insert(ledger).values({
+      userId,
+      type,
+      amount,
+      refType: ref?.refType ?? null,
+      refId: ref?.refId ?? null,
+    });
   });
 
   return newAmount;
+}
+
+/**
+ * Идемпотентное зачисление подтверждённого крипто-платежа. В одной транзакции:
+ * переводим payment в статус "credited" под guard'ом (WHERE status<>'credited'),
+ * и только если переход состоялся — пополняем баланс + пишем ledger-депозит.
+ * Повторный вызов на уже зачисленном платеже — no-op (двойного кредита нет).
+ * Возвращает true, если зачисление произошло именно сейчас.
+ */
+export async function creditConfirmedPayment(payment: {
+  id: string;
+  userId: string;
+  amount: string;
+}): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const flipped = await tx
+      .update(payments)
+      .set({ status: "credited", creditedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(payments.id, payment.id), ne(payments.status, "credited")))
+      .returning({ id: payments.id });
+    if (!flipped[0]) return false; // уже зачислен — идемпотентный no-op
+
+    await ensureBalance(tx, payment.userId);
+    await tx
+      .update(balances)
+      .set({
+        amount: sql`${balances.amount} + ${payment.amount}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(balances.userId, payment.userId));
+
+    await tx.insert(ledger).values({
+      userId: payment.userId,
+      type: "deposit",
+      amount: payment.amount,
+      refType: "payment",
+      refId: payment.id,
+    });
+    return true;
+  });
 }

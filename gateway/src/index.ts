@@ -2,6 +2,7 @@ import express from "express";
 import { config } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
 import { loadPricing } from "./services/pricing.js";
+import { startPaymentWorker } from "./payments/worker.js";
 import { healthRouter } from "./routes/health.js";
 import { adminRouter } from "./routes/admin.js";
 import { accountRouter } from "./routes/account.js";
@@ -32,6 +33,9 @@ async function bootstrap() {
       `[gateway] listening on :${config.GATEWAY_PORT} → LiteLLM ${config.LITELLM_URL}`,
     );
   });
+
+  // Фоновый поллер крипто-депозитов (no-op, если крипта не сконфигурена).
+  startPaymentWorker();
 }
 
 bootstrap().catch((err) => {

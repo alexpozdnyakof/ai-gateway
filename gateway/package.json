@@ -15,9 +15,14 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed-pricing.ts"
+    "db:seed": "tsx src/db/seed-pricing.ts",
+    "wallet:gen": "node scripts/gen-wallet.mjs"
   },
   "dependencies": {
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@scure/base": "^2.2.0",
+    "@scure/bip32": "^2.2.0",
     "decimal.js": "^10.4.3",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.2",
@@ -26,6 +31,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@scure/bip39": "^2.2.0",
     "@types/express": "^4.17.21",
     "@types/node": "^20.19.43",
     "@types/pg": "^8.20.0",

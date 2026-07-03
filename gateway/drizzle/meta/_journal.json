@@ -15,6 +15,13 @@
       "when": 1782816105731,
       "tag": "0001_rare_guardsmen",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782901549178,
+      "tag": "0002_curious_madelyne_pryor",
+      "breakpoints": true
     }
   ]
 }

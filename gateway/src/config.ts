@@ -16,6 +16,18 @@ const envSchema = z.object({
   ADMIN_TOKEN: z.string().min(1, "ADMIN_TOKEN is required"),
   // Минимальный баланс для пропуска запроса (NUMERIC-строка). Ниже — 402.
   BILLING_MIN_BALANCE: z.string().default("0"),
+
+  // ── Крипто-пополнение (Stage 5). Всё опционально: без TRON_XPUB worker не стартует.
+  // Account-level xpub (m/44'/195'/0') — watch-only, приватного ключа тут нет.
+  TRON_XPUB: z.string().optional(),
+  TRONGRID_URL: z.string().url().default("https://nile.trongrid.io"),
+  TRONGRID_API_KEY: z.string().optional(),
+  // TRC-20 контракт USDT (Nile сейчас, mainnet позже — только через env).
+  USDT_CONTRACT_ADDRESS: z.string().optional(),
+  USDT_DECIMALS: z.coerce.number().int().positive().default(6),
+  // Финализация Tron ~19 SR-блоков.
+  CRYPTO_MIN_CONFIRMATIONS: z.coerce.number().int().positive().default(19),
+  CRYPTO_POLL_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -30,3 +42,8 @@ if (!parsed.success) {
 
 export const config = parsed.data;
 export type Config = typeof config;
+
+// Крипта включена, только если задан xpub и адрес USDT-контракта.
+export const paymentsEnabled = Boolean(
+  config.TRON_XPUB && config.USDT_CONTRACT_ADDRESS,
+);

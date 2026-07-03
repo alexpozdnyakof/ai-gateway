@@ -1,9 +1,11 @@
 import {
   pgTable,
+  pgSequence,
   uuid,
   text,
   timestamp,
   integer,
+  bigint,
   numeric,
   boolean,
   index,
@@ -127,9 +129,70 @@ export const modelPricing = pgTable("model_pricing", {
     .defaultNow(),
 });
 
+// ── Stage 5: крипто-пополнение (USDT TRC-20, Tron) ───────────────────────────
+
+// Атомарная выдача BIP-44 index деривации адресов (m/44'/195'/0'/0/index).
+export const depositDerivationSeq = pgSequence("deposit_derivation_seq", {
+  startWith: 0,
+  minValue: 0,
+});
+
+// Персональный депозит-адрес юзера. Деривируется из watch-only xpub; приватного
+// ключа в БД нет — только адрес и index. Один адрес на юзера.
+export const depositAddresses = pgTable(
+  "deposit_addresses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    chain: text("chain").notNull().default("tron"),
+    address: text("address").notNull().unique(),
+    derivationIndex: integer("derivation_index").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("deposit_addresses_address_idx").on(t.address)],
+);
+
+// Входящие крипто-платежи. Зачисляются в баланс после N подтверждений;
+// tx_hash unique — идемпотентность (дубль игнорируется).
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    chain: text("chain").notNull().default("tron"),
+    txHash: text("tx_hash").notNull().unique(),
+    fromAddr: text("from_addr"),
+    toAddr: text("to_addr").notNull(),
+    amount: numeric("amount", { precision: 20, scale: 8 }).notNull(),
+    confirmations: integer("confirmations").notNull().default(0),
+    status: text("status").notNull().default("pending"), // pending | confirmed | credited
+    blockNumber: bigint("block_number", { mode: "number" }),
+    creditedAt: timestamp("credited_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("payments_status_idx").on(t.status),
+    index("payments_to_addr_idx").on(t.toAddr),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type Balance = typeof balances.$inferSelect;
 export type LedgerEntry = typeof ledger.$inferSelect;
 export type UsageRecord = typeof usageRecords.$inferSelect;
 export type ModelPricing = typeof modelPricing.$inferSelect;
+export type DepositAddress = typeof depositAddresses.$inferSelect;
+export type Payment = typeof payments.$inferSelect;

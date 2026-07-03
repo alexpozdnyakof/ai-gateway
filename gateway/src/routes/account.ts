@@ -2,10 +2,12 @@ import { Router } from "express";
 import { z } from "zod";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { apiKeys, usageRecords } from "../db/schema.js";
+import { apiKeys, payments, usageRecords } from "../db/schema.js";
 import { authenticate } from "../middleware/auth.js";
 import { createApiKeyForUser } from "../services/keys.js";
 import { getBalance } from "../services/billing.js";
+import { paymentsEnabled } from "../config.js";
+import { getOrCreateDepositAddress } from "../payments/deposit.js";
 
 export const accountRouter = Router();
 
@@ -19,6 +21,44 @@ accountRouter.get("/account/balance", async (req, res, next) => {
   try {
     const amount = await getBalance(req.auth!.userId);
     res.json({ amount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /account/deposit-address — Tron-адрес для пополнения (создаётся лениво).
+accountRouter.get("/account/deposit-address", async (req, res, next) => {
+  if (!paymentsEnabled) {
+    res.status(503).json({
+      error: { message: "deposits not configured", type: "unavailable" },
+    });
+    return;
+  }
+  try {
+    const addr = await getOrCreateDepositAddress(req.auth!.userId);
+    res.json(addr);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /account/payments — история крипто-пополнений юзера.
+accountRouter.get("/account/payments", async (req, res, next) => {
+  try {
+    const rows = await db
+      .select({
+        txHash: payments.txHash,
+        amount: payments.amount,
+        status: payments.status,
+        confirmations: payments.confirmations,
+        createdAt: payments.createdAt,
+        creditedAt: payments.creditedAt,
+      })
+      .from(payments)
+      .where(eq(payments.userId, req.auth!.userId))
+      .orderBy(desc(payments.createdAt))
+      .limit(100);
+    res.json({ data: rows });
   } catch (err) {
     next(err);
   }

@@ -51,6 +51,15 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
+      BILLING_MIN_BALANCE: ${BILLING_MIN_BALANCE:-0}
+      # Крипто-пополнение (worker в этом же процессе). Пусто → выключено.
+      TRON_XPUB: ${TRON_XPUB:-}
+      TRONGRID_URL: ${TRONGRID_URL:-https://nile.trongrid.io}
+      TRONGRID_API_KEY: ${TRONGRID_API_KEY:-}
+      USDT_CONTRACT_ADDRESS: ${USDT_CONTRACT_ADDRESS:-}
+      USDT_DECIMALS: ${USDT_DECIMALS:-6}
+      CRYPTO_MIN_CONFIRMATIONS: ${CRYPTO_MIN_CONFIRMATIONS:-19}
+      CRYPTO_POLL_INTERVAL_SECONDS: ${CRYPTO_POLL_INTERVAL_SECONDS:-30}
     depends_on:
       litellm:
         condition: service_healthy
